@@ -192,7 +192,7 @@ export function App() {
       </Box>
 
       {/* CONTAINER PRINCIPAL */}
-      <Box component={motion.div} variants={containerVariants} initial="hidden" animate="show" sx={{ px: { xs: 2, md: 0 }, pt: 4, maxWidth: "1800px", margin: "0 auto" }}>
+      <Box component={motion.div} variants={containerVariants} initial="hidden" animate="show" sx={{ px: { xs: 2, md: 0 }, pt: 4, maxWidth: "1600px", margin: "0 auto" }}>
 
         {/* ================= KPIs ESTRATÉGICOS ================= */}
         <Typography variant="subtitle2" sx={{ color: "#64748B", fontWeight: 700, textTransform: "uppercase", mb: 2, letterSpacing: 1 }}>
