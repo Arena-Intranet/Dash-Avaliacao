@@ -24,7 +24,6 @@ const itemVariants: Variants = {
   }
 };
 
-// Formatação rápida de datas para o padrão da imagem
 const formatarData = (dataString?: string) => {
   if (!dataString || dataString.startsWith("0000")) return "---";
   const data = new Date(dataString);
@@ -58,8 +57,7 @@ export function App() {
       const response = await fetch("https://arenavidros.com.br/api/pesquisas");
       const dados: PesquisaRegistro[] = await response.json();
 
-      const dadosOrdenados = [...dados].reverse();
-      setRegistros(dadosOrdenados);
+      setRegistros(dados);
 
       const agora = new Date();
       setUltimaAtualizacao(agora.toLocaleTimeString("pt-BR"));
@@ -212,7 +210,7 @@ export function App() {
                 </Box>
                 <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
                   <Typography variant="h3" sx={{ fontWeight: 800, color: getCsatColor(analisesMetricas.csatScore) }}>{analisesMetricas.csatScore}%</Typography>
-                  <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 600 }}>meta: &gt;80%</Typography>
+                  <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 600 }}>meta: &gt;90%</Typography>
                 </Box>
                 <LinearProgress variant="determinate" value={analisesMetricas.csatScore} sx={{ mt: 3, height: 8, borderRadius: 4, bgcolor: "#F1F5F9", "& .MuiLinearProgress-bar": { bgcolor: getCsatColor(analisesMetricas.csatScore) } }} />
               </CardContent>
