@@ -394,9 +394,17 @@ export function App() {
                       </TableCell>
 
                       {/* 7. Mensagem Original */}
-                      <TableCell sx={{ color: "#64748B", fontSize: "0.85rem", maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <TableCell>
                         <Tooltip title={row.mensagem_chamado || ""} placement="top" arrow>
-                          <span>{row.mensagem_chamado || "---"}</span>
+                          <div style={{
+                            maxWidth: 200,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            cursor: "pointer"
+                          }}>
+                            {row.mensagem_chamado || "---"}
+                          </div>
                         </Tooltip>
                       </TableCell>
 
@@ -412,9 +420,17 @@ export function App() {
                       </TableCell>
 
                       {/* 9. Opinião / Feedback */}
-                      <TableCell sx={{ color: "#334155", fontSize: "0.85rem", maxWidth: 220, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <TableCell>
                         <Tooltip title={row.opiniao_usuario || ""} placement="top" arrow>
-                          <span>{row.opiniao_usuario || "---"}</span>
+                          <div style={{
+                            maxWidth: 220,
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            cursor: "pointer"
+                          }}>
+                            {row.opiniao_usuario || "---"}
+                          </div>
                         </Tooltip>
                       </TableCell>
 
