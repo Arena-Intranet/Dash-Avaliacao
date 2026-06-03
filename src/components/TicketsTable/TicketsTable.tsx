@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Box, Paper, Typography, TextField, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, CircularProgress, Chip, Tooltip, TablePagination } from "@mui/material";
+import { Box, Paper, Typography, TextField, TableContainer, Table, TableHead, TableRow, TableCell, TableBody, CircularProgress, Chip, Tooltip, TablePagination, FormControl, InputLabel, Select, MenuItem } from "@mui/material";
 import { Search, CheckCircle, Error, HourglassEmpty, TaskAlt } from "@mui/icons-material";
 import { motion } from "framer-motion";
 import { itemVariants, type PesquisaRegistro, MAPEAMENTO_REGRAS_TI } from "../../types/types";
@@ -7,8 +7,31 @@ import { TicketDetailsModal, obterHorasLimiteDaRegra } from "../DetailsModal/Det
 import type { TicketsTableProps } from "./types/types";
 import { CORES_SISTEMA } from "../AnalyticsCharts/types/types";
 
+// Interface estendida localmente para aceitar as novas props de filtro
+interface TicketsTablePropsEstendida extends TicketsTableProps {
+    filtroAvaliacao: string;
+    setFiltroAvaliacao: React.Dispatch<React.SetStateAction<string>>;
+}
 
-export const TicketsTable: React.FC<TicketsTableProps> = ({ primaryColor, filtro, setFiltro, setPage, loading, registros, registrosFiltrados, page, rowsPerPage, handleChangePage, handleChangeRowsPerPage, infoAvaliacoes, formatarData, formatarHorasMinutos, calcularDiferencaHoras }) => {
+export const TicketsTable: React.FC<TicketsTablePropsEstendida> = ({
+    primaryColor,
+    filtro,
+    setFiltro,
+    filtroAvaliacao,     // <-- Nova Prop recebida
+    setFiltroAvaliacao,  // <-- Nova Prop recebida
+    setPage,
+    loading,
+    registros,
+    registrosFiltrados,
+    page,
+    rowsPerPage,
+    handleChangePage,
+    handleChangeRowsPerPage,
+    infoAvaliacoes,
+    formatarData,
+    formatarHorasMinutos,
+    calcularDiferencaHoras
+}) => {
 
     const [modalAberto, setModalAberto] = useState<boolean>(false);
     const [chamadoSelecionado, setChamadoSelecionado] = useState<PesquisaRegistro | null>(null);
@@ -42,14 +65,38 @@ export const TicketsTable: React.FC<TicketsTableProps> = ({ primaryColor, filtro
                         <Typography variant="h6" sx={{ fontWeight: 800, color: primaryColor }}>Monitoramento de Chamados</Typography>
                         <Typography variant="caption" sx={{ color: "#64748B" }}>Clique em qualquer linha para abrir a ficha de detalhes do chamado.</Typography>
                     </Box>
-                    <TextField
-                        size="small"
-                        placeholder="Buscar por usuário, chamado ou assunto..."
-                        value={filtro}
-                        onChange={(e) => { setFiltro(e.target.value); setPage(0); }}
-                        slotProps={{ input: { startAdornment: <Search sx={{ color: "#94A3B8", mr: 1, fontSize: 18 }} /> } }}
-                        sx={{ bgcolor: "#FFF", width: { xs: "100%", sm: 320 }, "& .MuiOutlinedInput-root": { borderRadius: 2, "& fieldset": { borderColor: "#E2E8F0" } } }}
-                    />
+
+                    <Box sx={{ display: "flex", gap: 2, width: { xs: "100%", sm: "auto" }, flexHorizontal: "wrap", flexDirection: { xs: "column", sm: "row" } }}>
+
+                        <FormControl size="small" sx={{ minWidth: { xs: "100%", sm: 120 } }}>
+                            <InputLabel id="filtro-satisfacao-label" sx={{ fontSize: "0.9rem", fontWeight: 500 }}>Satisfação</InputLabel>
+                            <Select
+                                labelId="filtro-satisfacao-label"
+                                id="filtro-satisfacao"
+                                value={filtroAvaliacao}
+                                label="Satisfação"
+                                onChange={(e) => { setFiltroAvaliacao(e.target.value); setPage(0); }}
+                                sx={{ bgcolor: "#FFF", borderRadius: 2, "& .MuiOutlinedInput-notchedOutline": { borderColor: "#E2E8F0" } }}
+                            >
+                                <MenuItem value="todos">Todos</MenuItem>
+                                <MenuItem value="excelente">🤩</MenuItem>
+                                <MenuItem value="bom">😊</MenuItem>
+                                <MenuItem value="regular">😐</MenuItem>
+                                <MenuItem value="ruim">😞</MenuItem>
+                            </Select>
+                        </FormControl>
+
+                        <TextField
+                            size="small"
+                            placeholder="Buscar por usuário ou chamado..."
+                            value={filtro}
+                            onChange={(e) => { setFiltro(e.target.value); setPage(0); }}
+                            slotProps={{ input: { startAdornment: <Search sx={{ color: "#94A3B8", mr: 1, fontSize: 18 }} /> } }}
+                            sx={{ bgcolor: "#FFF", width: { xs: "100%", sm: 310 }, "& .MuiOutlinedInput-root": { borderRadius: 2, "& fieldset": { borderColor: "#E2E8F0" } } }}
+                        />
+
+
+                    </Box>
                 </Box>
 
                 <TableContainer>

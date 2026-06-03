@@ -41,7 +41,6 @@ const calcularDiferencaHoras = (inicioStr?: string, fimStr?: string): number | n
   return diferenca >= 0 ? diferenca : null;
 };
 
-// Função auxiliar para traduzir os textos de tempo do mapeamento de regras em valores numéricos decimais
 const obterHorasLimiteDaRegra = (tempoStr: string): number => {
   const texto = tempoStr.toLowerCase();
 
@@ -69,6 +68,7 @@ export function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [registros, setRegistros] = useState<PesquisaRegistro[]>([]);
   const [filtro, setFiltro] = useState<string>("");
+  const [filtroAvaliacao, setFiltroAvaliacao] = useState<string>("todos");
   const [ultimaAtualizacao, setUltimaAtualizacao] = useState<string>("");
 
   const [page, setPage] = useState<number>(0);
@@ -197,7 +197,6 @@ export function App() {
 
     const dadosTitulo = Object.values(contagemTitulo)
       .sort((a, b) => b.total - a.total)
-      .slice(0, 5)
       .map(({ titulo, ruim, regular, bom, excelente }) => ({
         titulo,
         ruim,
@@ -231,13 +230,18 @@ export function App() {
   const registrosFiltrados = registros.filter((item) => {
     const termo = filtro.toLowerCase();
     const statusFiltro = !item.avaliacao_texto ? "pendente" : "respondido";
-    return (
+
+    const correspondeTexto = (
       (item.nome_usuario && item.nome_usuario.toLowerCase().includes(termo)) ||
       (item.numero_chamado && item.numero_chamado.toLowerCase().includes(termo)) ||
       (item.opiniao_usuario && item.opiniao_usuario.toLowerCase().includes(termo)) ||
       (item.mensagem_chamado && item.mensagem_chamado.toLowerCase().includes(termo)) ||
       statusFiltro.includes(termo)
     );
+    const avaliacaoItem = item.avaliacao_texto ? item.avaliacao_texto.toLowerCase() : "";
+    const correspondeAvaliacao = filtroAvaliacao === "todos" || avaliacaoItem === filtroAvaliacao;
+
+    return correspondeTexto && correspondeAvaliacao;
   });
 
   const handleChangePage = (_event: React.MouseEvent<HTMLButtonElement> | null, newPage: number) => setPage(newPage);
@@ -289,6 +293,8 @@ export function App() {
           setFiltro={setFiltro}
           setPage={setPage}
           loading={loading}
+          filtroAvaliacao={filtroAvaliacao} 
+          setFiltroAvaliacao={setFiltroAvaliacao}
           registros={registros}
           registrosFiltrados={registrosFiltrados}
           page={page}

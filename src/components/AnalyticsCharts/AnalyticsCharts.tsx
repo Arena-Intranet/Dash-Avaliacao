@@ -48,7 +48,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ primaryColor, 
                             Distribuição Geral de Satisfação
                         </Typography>
 
-                        <Box sx={{ width: "100%", height: 240, display: "flex", justifyContent: "center", alignItems: "center", "& .MuiChartsLegend-root": { display: "none !important" }, "& text.MuiPieArcLabel-root, & .MuiPieArcLabel-root, & text[class*='MuiPieArcLabel']": { fill: "#FFFFFF !important", color: "#FFFFFF !important", fontSize: "12px !important", fontWeight: "900 !important", textShadow: "0px 1px 2px rgba(0,0,0,0.4)" } }}>
+                        <Box sx={{ width: "100%", height: 240, display: "flex", justifyContent: "center", alignItems: "center", "& .MuiChartsLegend-root": { display: "none !important" } }}>
                             {analisesMetricas.dadosMixPizza.length > 0 ? (
                                 <PieChart
                                     series={[{
@@ -64,6 +64,16 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ primaryColor, 
                                         },
                                         arcLabelMinAngle: 5,
                                     }]}
+                                    slotProps={{
+                                        pieArcLabel: {
+                                            style: {
+                                                fill: '#FFFFFF',
+                                                fontSize: '12px',
+                                                fontWeight: '900',
+                                                textShadow: '0px 1px 2px rgba(0,0,0,0.4)'
+                                            }
+                                        }
+                                    }}
                                     margin={{ top: 10, bottom: 10, left: 10, right: 10 }}
                                 />
                             ) : (
@@ -76,7 +86,7 @@ export const AnalyticsCharts: React.FC<AnalyticsChartsProps> = ({ primaryColor, 
                                 { key: 'regular', label: 'Regular 😐', color: '#f57c00' },
                                 { key: 'bom', label: 'Bom 😊', color: '#0288d1' },
                                 { key: 'excelente', label: 'Excelente 🤩', color: '#15803d' }
-                                
+
                             ].map((item) => {
                                 const dadoExistente = analisesMetricas.dadosMixPizza.find(d => d.label.toLowerCase() === item.key);
                                 return (
