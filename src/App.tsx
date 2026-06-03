@@ -1,36 +1,68 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Box, Typography, Card, CardContent, Table, TableBody, TableCell, TableContainer, TableRow, Paper, TablePagination, TextField, CircularProgress, Tooltip, LinearProgress, TableHead, Chip, Avatar } from "@mui/material";
-import { TrendingUp, QueryBuilder, Search, Send, } from "@mui/icons-material";
+import { Box, Typography } from "@mui/material";
 import { motion, type Variants } from "framer-motion";
-import { LineChart } from "@mui/x-charts/LineChart";
-import { PieChart } from "@mui/x-charts/PieChart";
-import type { PesquisaRegistro, KPIsAnalises } from "./types/types";
+import { MAPEAMENTO_REGRAS_TI, type PesquisaRegistro } from "./types/types";
 import Logo from "../public/logo1.png";
+import { MetricCards } from "./components/MetricCards/MetricCards";
+import { AnalyticsCharts } from "./components/AnalyticsCharts/AnalyticsCharts";
+import { TicketsTable } from "./components/TicketsTable/TicketsTable";
 
 const containerVariants: Variants = {
   hidden: { opacity: 0 },
   show: {
     opacity: 1,
-    transition: { staggerChildren: 0.08 }
-  }
-};
-
-const itemVariants: Variants = {
-  hidden: { opacity: 0, y: 15 },
-  show: {
-    opacity: 1,
-    y: 0,
-    transition: { type: "spring", stiffness: 110 }
+    transition: { staggerChildren: 0.05 }
   }
 };
 
 const formatarData = (dataString?: string) => {
   if (!dataString || dataString.startsWith("0000")) return "---";
   const data = new Date(dataString);
-  return data.toLocaleString("pt-BR", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit", second: "2-digit"
-  });
+  const dia = String(data.getDate()).padStart(2, '0');
+  const mes = String(data.getMonth() + 1).padStart(2, '0');
+  const ano = data.getFullYear();
+  const horas = String(data.getHours()).padStart(2, '0');
+  const min = String(data.getMinutes()).padStart(2, '0');
+  return `${dia}/${mes}/${ano} às ${horas}h ${min}min`;
+};
+
+const formatarHorasMinutos = (horasDecimais: number | null): string => {
+  if (horasDecimais === null) return "---";
+  const h = Math.floor(horasDecimais);
+  const m = Math.round((horasDecimais - h) * 60);
+  return `${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}min`;
+};
+
+const calcularDiferencaHoras = (inicioStr?: string, fimStr?: string): number | null => {
+  if (!inicioStr || !fimStr || inicioStr.startsWith("0000") || fimStr.startsWith("0000")) return null;
+  const inicio = new Date(inicioStr).getTime();
+  const fim = new Date(fimStr).getTime();
+  const diferenca = (fim - inicio) / (1000 * 60 * 60);
+  return diferenca >= 0 ? diferenca : null;
+};
+
+// Função auxiliar para traduzir os textos de tempo do mapeamento de regras em valores numéricos decimais
+const obterHorasLimiteDaRegra = (tempoStr: string): number => {
+  const texto = tempoStr.toLowerCase();
+
+  if (texto.includes("hora") && !texto.includes("min")) {
+    const apenasNumeros = texto.replace(/[^0-9]/g, "");
+    return apenasNumeros ? parseFloat(apenasNumeros) : 24;
+  }
+
+  if (texto.includes("h") && texto.includes("min")) {
+    const partes = texto.split("h");
+    const horas = parseFloat(partes[0].replace(/[^0-9]/g, "")) || 0;
+    const minutos = parseFloat(partes[1].replace(/[^0-9]/g, "")) || 0;
+    return horas + (minutos / 60);
+  }
+
+  if (texto.includes("min") && !texto.includes("h")) {
+    const minutos = parseFloat(texto.replace(/[^0-9]/g, "")) || 0;
+    return minutos / 60;
+  }
+
+  return 24;
 };
 
 export function App() {
@@ -44,11 +76,11 @@ export function App() {
 
   const primaryColor = "#142B4D";
 
-  const infoAvaliacoes: Record<string, { label: string; icon: string; color: string; bg: string }> = {
-    ruim: { label: "Ruim", icon: "😞", color: "#E11D48", bg: "#FFF1F2" },
-    regular: { label: "Regular", icon: "😐", color: "#D97706", bg: "#FEF3C7" },
-    bom: { label: "Bom", icon: "😊", color: "#2563EB", bg: "#EFF6FF" },
-    excelente: { label: "Excelente", icon: "🤩", color: "#16A34A", bg: "#F0FDF4" },
+  const infoAvaliacoes: Record<string, { label: string; icon: string; color: string; bg: string; nota: number }> = {
+    ruim: { label: "Ruim", icon: "😞", color: "#E11D48", bg: "#FFF1F2", nota: 2.5 },
+    regular: { label: "Regular", icon: "😐", color: "#D97706", bg: "#FEF3C7", nota: 5.0 },
+    bom: { label: "Bom", icon: "😊", color: "#2563EB", bg: "#EFF6FF", nota: 7.5 },
+    excelente: { label: "Excelente", icon: "🤩", color: "#16A34A", bg: "#F0FDF4", nota: 10.0 },
   };
 
   const fetchPesquisas = async () => {
@@ -56,9 +88,7 @@ export function App() {
       setLoading(true);
       const response = await fetch("https://arenavidros.com.br/api/pesquisas");
       const dados: PesquisaRegistro[] = await response.json();
-
       setRegistros(dados);
-
       const agora = new Date();
       setUltimaAtualizacao(agora.toLocaleTimeString("pt-BR"));
     } catch (error) {
@@ -77,8 +107,13 @@ export function App() {
   const analisesMetricas = useMemo(() => {
     const contagem = { ruim: 0, regular: 0, bom: 0, excelente: 0 };
     const historicoDatas: Record<string, { data: string; total: number }> = {};
+    const contagemUrgencia: Record<string, number> = {};
+    const contagemTitulo: Record<string, { titulo: string; ruim: number; regular: number; bom: number; excelente: number; total: number }> = {};
 
-    const kpisIniciais: KPIsAnalises = {
+    let totalSLAAtendido = 0;
+    let totalSLADentroDoPrazo = 0;
+
+    const kpisIniciais = {
       totalRespondidos: 0,
       somaPontos: 0,
       promotores: 0,
@@ -88,19 +123,20 @@ export function App() {
       totalTentativasEnvio: 0
     };
 
-    const processamento = registros.reduce<KPIsAnalises>((acc, curr) => {
+    const processamento = registros.reduce((acc, curr) => {
       acc.totalTentativasEnvio += Number(curr.tentativas_envio || 0);
-
       const tipoAvaliacao = curr.avaliacao_texto ? String(curr.avaliacao_texto).toLowerCase() : "";
+      const titulo = curr.titulo_ps || "Outros";
+
+      if (!contagemTitulo[titulo]) {
+        contagemTitulo[titulo] = { titulo, ruim: 0, regular: 0, bom: 0, excelente: 0, total: 0 };
+      }
 
       if (curr.pontuacao !== null && curr.pontuacao !== undefined && tipoAvaliacao && contagem[tipoAvaliacao as keyof typeof contagem] !== undefined) {
         acc.totalRespondidos++;
         acc.somaPontos += Number(curr.pontuacao);
         contagem[tipoAvaliacao as keyof typeof contagem]++;
-
-        if (Number(curr.pontuacao) >= 3) {
-          acc.promotores++;
-        }
+        contagemTitulo[titulo][tipoAvaliacao as keyof typeof contagem]++;
 
         if (curr.criado_em && !curr.criado_em.startsWith("0000")) {
           const dataFormatada = new Date(curr.criado_em).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
@@ -113,14 +149,23 @@ export function App() {
         acc.totalPendentes++;
       }
 
-      if (curr.data_abertura && curr.data_termino && !curr.data_abertura.startsWith("0000")) {
-        const inicio = new Date(curr.data_abertura).getTime();
-        const fim = new Date(curr.data_termino).getTime();
-        const diferencaHoras = (fim - inicio) / (1000 * 60 * 60);
+      const urgencia = curr.urgencia_ps || "Não Definida";
+      contagemUrgencia[urgencia] = (contagemUrgencia[urgencia] || 0) + 1;
+      contagemTitulo[titulo].total++;
 
-        if (diferencaHoras > 0) {
-          acc.somaTempoAtendimento += diferencaHoras;
-          acc.chamadosComTempo++;
+      // --- CÁLCULO INTELIGENTE DO SLA INDIVIDUAL ---
+      const diferencaHoras = calcularDiferencaHoras(curr.data_abertura, curr.data_termino);
+      if (diferencaHoras !== null) {
+        acc.somaTempoAtendimento += diferencaHoras;
+        acc.chamadosComTempo++;
+        totalSLAAtendido++;
+
+        // Descobre a regra configurada para este assunto e converte em horas utilizáveis
+        const regraEncontrada = MAPEAMENTO_REGRAS_TI[titulo];
+        const limiteHorasSLA = regraEncontrada ? obterHorasLimiteDaRegra(regraEncontrada.tempo) : 24;
+
+        if (diferencaHoras <= limiteHorasSLA) {
+          totalSLADentroDoPrazo++;
         }
       }
 
@@ -129,17 +174,37 @@ export function App() {
 
     const totalChamados = registros.length;
     const taxaResposta = totalChamados > 0 ? Math.round((processamento.totalRespondidos / totalChamados) * 100) : 0;
-    const csatScore = processamento.totalRespondidos > 0 ? Math.round((processamento.promotores / processamento.totalRespondidos) * 100) : 0;
-    const tmaMedio = processamento.chamadosComTempo > 0 ? (processamento.somaTempoAtendimento / processamento.chamadosComTempo).toFixed(1) : "0.0";
+    const csatScore = processamento.totalRespondidos > 0 ? Math.round(((processamento.somaPontos / processamento.totalRespondidos) / 10) * 100) : 0;
 
-    const dadosTimeline = Object.values(historicoDatas).slice(-10);
+    const tmaDecimal = processamento.chamadosComTempo > 0 ? (processamento.somaTempoAtendimento / processamento.chamadosComTempo) : null;
 
-    const dadosMixPizza = (Object.keys(infoAvaliacoes) as Array<keyof typeof infoAvaliacoes>).map((chave, index) => ({
+    const percentualSLA = totalSLAAtendido > 0 ? Math.round((totalSLADentroDoPrazo / totalSLAAtendido) * 100) : 0;
+    const estouroSLA = totalSLAAtendido - totalSLADentroDoPrazo;
+    const dadosTimeline = Object.values(historicoDatas).slice(-7);
+
+    const dadosMixPizza = Object.keys(infoAvaliacoes).map((chave, index) => ({
       id: index,
       label: infoAvaliacoes[chave].label,
       value: contagem[chave as keyof typeof contagem],
       color: infoAvaliacoes[chave].color,
-    }));
+    })).filter(item => item.value > 0);
+
+    const coresUrgencia: Record<string, string> = { "baixa": "#2563EB", "média": "#D97706", "alta": "#E11D48", "urgente": "#E11D48" };
+    const dadosUrgencia = Object.entries(contagemUrgencia).map(([label, value], id) => {
+      const corBase = coresUrgencia[label.toLowerCase()] || "#64748B";
+      return { id, label, value, color: corBase };
+    });
+
+    const dadosTitulo = Object.values(contagemTitulo)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 5)
+      .map(({ titulo, ruim, regular, bom, excelente }) => ({
+        titulo,
+        ruim,
+        regular,
+        bom,
+        excelente
+      }));
 
     return {
       kpis: processamento,
@@ -147,15 +212,19 @@ export function App() {
       totalChamados,
       taxaResposta,
       csatScore,
-      tmaMedio,
+      tmaDecimal,
+      percentualSLA,
+      estouroSLA,
       dadosTimeline,
-      dadosMixPizza
+      dadosMixPizza,
+      dadosUrgencia,
+      dadosTitulo
     };
   }, [registros]);
 
-  const getCsatColor = (score: number) => {
-    if (score >= 80) return "#16A34A";
-    if (score >= 60) return "#D97706";
+  const getSlaColor = (score: number) => {
+    if (score >= 85) return "#16A34A";
+    if (score >= 70) return "#D97706";
     return "#E11D48";
   };
 
@@ -166,7 +235,7 @@ export function App() {
       (item.nome_usuario && item.nome_usuario.toLowerCase().includes(termo)) ||
       (item.numero_chamado && item.numero_chamado.toLowerCase().includes(termo)) ||
       (item.opiniao_usuario && item.opiniao_usuario.toLowerCase().includes(termo)) ||
-      (item.avaliacao_texto && item.avaliacao_texto.toLowerCase().includes(termo)) ||
+      (item.mensagem_chamado && item.mensagem_chamado.toLowerCase().includes(termo)) ||
       statusFiltro.includes(termo)
     );
   });
@@ -189,284 +258,59 @@ export function App() {
         </Box>
       </Box>
 
-      {/* CONTAINER PRINCIPAL */}
-      <Box component={motion.div} variants={containerVariants} initial="hidden" animate="show" sx={{ px: { xs: 2, md: 0 }, pt: 4, maxWidth: "1600px", margin: "0 auto" }}>
+      <Box component={motion.div} variants={containerVariants} initial="hidden" animate="show" sx={{ px: { xs: 2, md: 4 }, pt: 4, maxWidth: "1600px", margin: "0 auto" }}>
 
-        {/* ================= KPIs ESTRATÉGICOS ================= */}
         <Typography variant="subtitle2" sx={{ color: "#64748B", fontWeight: 700, textTransform: "uppercase", mb: 2, letterSpacing: 1 }}>
-          Indicadores Chave de Performance (KPIs)
+          Indicadores de Performance & SLA de Entrega
         </Typography>
 
-        <Box sx={{ display: "flex", flexDirection: { xs: "column", md: "row" }, gap: 3, mb: 4 }}>
-          {/* CSAT */}
-          <Box component={motion.div} variants={itemVariants} sx={{ flex: 1 }}>
-            <Card sx={{ borderRadius: 4, boxShadow: "0 4px 24px rgba(0,0,0,0.04)", height: "100%", border: "1px solid #E2E8F0" }}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-                  <Typography variant="body2" sx={{ color: "#475569", fontWeight: 700 }}>Índice de Satisfação (CSAT)</Typography>
-                  <Avatar sx={{ bgcolor: `${getCsatColor(analisesMetricas.csatScore)}15`, color: getCsatColor(analisesMetricas.csatScore), width: 36, height: 36 }}>
-                    <TrendingUp fontSize="small" />
-                  </Avatar>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
-                  <Typography variant="h3" sx={{ fontWeight: 800, color: getCsatColor(analisesMetricas.csatScore) }}>{analisesMetricas.csatScore}%</Typography>
-                  <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 600 }}>meta: &gt;90%</Typography>
-                </Box>
-                <LinearProgress variant="determinate" value={analisesMetricas.csatScore} sx={{ mt: 3, height: 8, borderRadius: 4, bgcolor: "#F1F5F9", "& .MuiLinearProgress-bar": { bgcolor: getCsatColor(analisesMetricas.csatScore) } }} />
-              </CardContent>
-            </Card>
-          </Box>
+        <MetricCards
+          analisesMetricas={analisesMetricas}
+          formatarHorasMinutos={formatarHorasMinutos}
+          getSlaColor={getSlaColor}
+        />
 
-          {/* TMA */}
-          <Box component={motion.div} variants={itemVariants} sx={{ flex: 1 }}>
-            <Card sx={{ borderRadius: 4, boxShadow: "0 4px 24px rgba(0,0,0,0.04)", height: "100%", border: "1px solid #E2E8F0" }}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-                  <Typography variant="body2" sx={{ color: "#475569", fontWeight: 700 }}>Tempo Médio (TMA)</Typography>
-                  <Avatar sx={{ bgcolor: "#EFF6FF", color: "#3B82F6", width: 36, height: 36 }}><QueryBuilder fontSize="small" /></Avatar>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
-                  <Typography variant="h3" sx={{ fontWeight: 800, color: "#1E293B" }}>{analisesMetricas.tmaMedio}</Typography>
-                  <Typography variant="body2" sx={{ color: "#64748B", fontWeight: 700 }}>horas</Typography>
-                </Box>
-                <Typography variant="caption" sx={{ display: "block", color: "#94A3B8", mt: 3, fontWeight: 600 }}>Média de tempo até a resolução</Typography>
-              </CardContent>
-            </Card>
-          </Box>
+        <AnalyticsCharts
+          primaryColor={primaryColor}
+          analisesMetricas={{
+            dadosTimeline: analisesMetricas.dadosTimeline,
+            dadosMixPizza: analisesMetricas.dadosMixPizza,
+            dadosTitulo: analisesMetricas.dadosTitulo,
+            dadosUrgencia: analisesMetricas.dadosUrgencia.map((item) => ({
+              urgencia: item.label,
+              quantidade: item.value,
+            }))
+          }}
+        />
 
-          {/* ENGAJAMENTO */}
-          <Box component={motion.div} variants={itemVariants} sx={{ flex: 1 }}>
-            <Card sx={{ borderRadius: 4, boxShadow: "0 4px 24px rgba(0,0,0,0.04)", height: "100%", border: "1px solid #E2E8F0" }}>
-              <CardContent sx={{ p: 3 }}>
-                <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 2 }}>
-                  <Typography variant="body2" sx={{ color: "#475569", fontWeight: 700 }}>Disparos e Interações</Typography>
-                  <Avatar sx={{ bgcolor: "#F5F3FF", color: "#8B5CF6", width: 36, height: 36 }}><Send fontSize="small" /></Avatar>
-                </Box>
-                <Box sx={{ display: "flex", alignItems: "baseline", gap: 1 }}>
-                  <Typography variant="h3" sx={{ fontWeight: 800, color: "#1E293B" }}>{analisesMetricas.kpis.totalTentativasEnvio}</Typography>
-                  <Typography variant="caption" sx={{ color: "#94A3B8", fontWeight: 600 }}>envios totais</Typography>
-                </Box>
-                <Typography variant="caption" sx={{ display: "inline-block", color: "#8B5CF6", mt: 3, fontWeight: 700, bgcolor: "#F5F3FF", px: 1.5, py: 0.5, borderRadius: 2 }}>
-                  Taxa de Engajamento: {analisesMetricas.taxaResposta}%
-                </Typography>
-              </CardContent>
-            </Card>
-          </Box>
-        </Box>
-
-        {/* ================= GRÁFICOS MUI ================= */}
-        <Box sx={{ display: "flex", flexDirection: { xs: "column", lg: "row" }, gap: 3, mb: 4 }}>
-          {/* Gráfico de Linha (Timeline) com MUI X Charts */}
-          <Box component={motion.div} variants={itemVariants} sx={{ flex: 2, minWidth: 0 }}>
-            <Paper sx={{ p: 3, borderRadius: 4, border: "1px solid #E2E8F0", boxShadow: "0 4px 24px rgba(0,0,0,0.02)" }} elevation={0}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: primaryColor, mb: 3 }}>Frequência de Feedbacks (Últimos dias)</Typography>
-              <Box sx={{ width: "100%", height: 260 }}>
-                <LineChart
-                  xAxis={[{
-                    scaleType: "point",
-                    data: analisesMetricas.dadosTimeline.map(d => d.data),
-                    tickLabelStyle: { fill: "#64748B", fontSize: 12, fontWeight: 500 }
-                  }]}
-                  series={[{
-                    data: analisesMetricas.dadosTimeline.map(d => d.total),
-                    color: primaryColor,
-                    area: true,
-                    showMark: true,
-                    curve: "linear",
-                  }]}
-                  margin={{ left: 30, right: 30, top: 10, bottom: 20 }}
-                  sx={{
-                    "& .MuiChartsTooltip-root": {
-                      borderRadius: 8
-                    }
-                  }}
-                />
-              </Box>
-            </Paper>
-          </Box>
-
-          <Box component={motion.div} variants={itemVariants} sx={{ flex: 1.2, minWidth: 0 }}>
-            <Paper sx={{ p: 3, borderRadius: 4, border: "1px solid #E2E8F0", boxShadow: "0 4px 24px rgba(0,0,0,0.02)", height: "100%" }} elevation={0}>
-              <Typography variant="subtitle1" sx={{ fontWeight: 800, color: primaryColor, mb: 3 }}>Mix de Sentimentos</Typography>
-              <Box sx={{ width: "100%", height: 250 }}>
-                <PieChart
-                  series={[{
-                    data: analisesMetricas.dadosMixPizza,
-                    innerRadius: 65,
-                    paddingAngle: 4,
-                    cornerRadius: 6,
-                  }]}
-                  slotProps={{
-                    legend: {
-                      direction: 'horizontal',
-                      position: { vertical: 'bottom', horizontal: 'center' },
-
-                    }
-                  }}
-                  margin={{ top: 10, bottom: 60, left: 10, right: 10 }}
-                />
-              </Box>
-            </Paper>
-          </Box>
-        </Box>
-
-        {/* ================= TABELA DE REGISTROS (ESTILO IMAGEM) ================= */}
-        <Paper component={motion.div} variants={itemVariants} elevation={0} sx={{ p: 3, borderRadius: 4, border: "1px solid #E2E8F0", boxShadow: "0 4px 24px rgba(0,0,0,0.03)" }}>
-          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2, mb: 3.5 }}>
-            <Box>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: primaryColor }}>Gestão de Avaliações</Typography>
-              <Typography variant="caption" sx={{ color: "#64748B", fontSize: 13 }}>Mostrando {registrosFiltrados.length} de {analisesMetricas.totalChamados} registros no total</Typography>
-            </Box>
-
-            <TextField
-              size="small"
-              placeholder="Buscar chamado, usuário, status..."
-              value={filtro}
-              onChange={(e) => { setFiltro(e.target.value); setPage(0); }}
-              slotProps={{ input: { startAdornment: <Search sx={{ color: "#94A3B8", mr: 1, fontSize: 20 }} /> } }}
-              sx={{ bgcolor: "#F8FAFC", width: { xs: "100%", sm: 360 }, "& .MuiOutlinedInput-root": { borderRadius: 3, "& fieldset": { borderColor: "#E2E8F0" } } }}
-            />
-          </Box>
-
-          <TableContainer>
-            <Table sx={{ minWidth: 1200 }}>
-              <TableHead>
-                <TableRow sx={{ bgcolor: "#F8FAFC", "& th": { borderBottom: "2px solid #F1F5F9", color: "#475569", fontWeight: 700, fontSize: "0.85rem", whiteSpace: "nowrap" } }}>
-                  <TableCell align="center" width="80">Avaliação</TableCell>
-                  <TableCell width="110">Chamado</TableCell>
-                  <TableCell width="140">Usuário</TableCell>
-                  <TableCell width="80" align="center">Envios</TableCell>
-                  <TableCell width="110">Status</TableCell>
-                  <TableCell width="160">Término</TableCell>
-                  <TableCell width="200">Mensagem original</TableCell>
-                  <TableCell width="80" align="center">Pontos</TableCell>
-                  <TableCell width="220">Opinião / Feedback</TableCell>
-                  <TableCell width="160">Data Envio</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {loading && registros.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} sx={{ py: 8, textAlign: "center" }}><CircularProgress size={32} sx={{ color: primaryColor }} /></TableCell>
-                  </TableRow>
-                ) : registrosFiltrados.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((row) => {
-                  const textoFormatado = String(row.avaliacao_texto).toLowerCase();
-                  const configAvaliacao = infoAvaliacoes[textoFormatado];
-                  const isRespondido = !!row.avaliacao_texto;
-
-                  return (
-                    <TableRow key={row.id} hover sx={{ "& td": { borderBottom: "1px solid #F1F5F9", py: 2 }, transition: "background-color 0.2s" }}>
-
-                      {/* 1. Emoji / Avaliação */}
-                      <TableCell align="center" sx={{ fontSize: "1.5rem" }}>
-                        {isRespondido && configAvaliacao ? configAvaliacao.icon : <span style={{ color: "#EF4444", fontWeight: 'bold' }}>❓</span>}
-                      </TableCell>
-
-                      {/* 2. Chamado */}
-                      <TableCell sx={{ fontWeight: 800, color: "#0F172A" }}>{row.numero_chamado}</TableCell>
-
-                      {/* 3. Usuário */}
-                      <TableCell sx={{ fontWeight: 600, color: "#334155" }}>{row.nome_usuario}</TableCell>
-
-                      {/* 4. Envios */}
-                      <TableCell align="center">
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: "#64748B" }}>
-                          {row.tentativas_envio || 0}
-                        </Typography>
-                      </TableCell>
-
-                      {/* 5. Status (Pendente / Respondido) -> Agora posicionado logo após Envios */}
-                      <TableCell>
-                        <Chip
-                          label={isRespondido ? "Respondido" : "Pendente"}
-                          size="small"
-                          sx={{
-                            bgcolor: isRespondido ? "#F0FDF4" : "#FFF1F2",
-                            color: isRespondido ? "#16A34A" : "#EF4444",
-                            fontWeight: 700, borderRadius: 2, fontSize: "0.75rem"
-                          }}
-                        />
-                      </TableCell>
-
-                      {/* 6. Término */}
-                      <TableCell sx={{ color: "#64748B", fontSize: "0.85rem" }}>
-                        {formatarData(row.data_termino)}
-                      </TableCell>
-
-                      {/* 7. Mensagem Original */}
-                      <TableCell>
-                        <Tooltip title={row.mensagem_chamado || ""} placement="top" arrow>
-                          <div style={{
-                            maxWidth: 200,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            cursor: "pointer"
-                          }}>
-                            {row.mensagem_chamado || "---"}
-                          </div>
-                        </Tooltip>
-                      </TableCell>
-
-                      {/* 8. Pontos */}
-                      <TableCell align="center">
-                        {row.pontuacao !== null && row.pontuacao !== undefined ? (
-                          <Typography sx={{ fontWeight: 800, color: row.pontuacao >= 3 ? "#16A34A" : "#E11D48", fontSize: "1rem" }}>
-                            {row.pontuacao}
-                          </Typography>
-                        ) : (
-                          <Typography sx={{ color: "#CBD5E1" }}>-</Typography>
-                        )}
-                      </TableCell>
-
-                      {/* 9. Opinião / Feedback */}
-                      <TableCell>
-                        <Tooltip title={row.opiniao_usuario || ""} placement="top" arrow>
-                          <div style={{
-                            maxWidth: 220,
-                            whiteSpace: "nowrap",
-                            overflow: "hidden",
-                            textOverflow: "ellipsis",
-                            cursor: "pointer"
-                          }}>
-                            {row.opiniao_usuario || "---"}
-                          </div>
-                        </Tooltip>
-                      </TableCell>
-
-                      {/* 10. Data Envio */}
-                      <TableCell sx={{ color: "#64748B", fontSize: "0.85rem" }}>
-                        {isRespondido ? formatarData(row.criado_em) : "---"}
-                      </TableCell>
-
-                    </TableRow>
-                  );
-                })}
-
-                {!loading && registrosFiltrados.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={10} align="center" sx={{ py: 8, color: "#94A3B8", fontWeight: 500 }}>
-                      Nenhum registro encontrado para essa busca.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </TableContainer>
-
-          <TablePagination
-            rowsPerPageOptions={[5, 10, 25, 50]}
-            component="div"
-            count={registrosFiltrados.length}
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={handleChangePage}
-            onRowsPerPageChange={handleChangeRowsPerPage}
-            labelRowsPerPage="Linhas por página:"
-            labelDisplayedRows={({ from, to, count }) => `${from}-${to} de ${count}`}
-            sx={{ borderTop: "1px solid #F1F5F9", mt: 1, ".MuiTablePagination-selectLabel, .MuiTablePagination-displayedRows": { fontWeight: 500, color: "#64748B" } }}
-          />
-        </Paper>
+        <TicketsTable
+          primaryColor={primaryColor}
+          filtro={filtro}
+          setFiltro={setFiltro}
+          setPage={setPage}
+          loading={loading}
+          registros={registros}
+          registrosFiltrados={registrosFiltrados}
+          page={page}
+          rowsPerPage={rowsPerPage}
+          handleChangePage={handleChangePage}
+          handleChangeRowsPerPage={handleChangeRowsPerPage}
+          infoAvaliacoes={infoAvaliacoes}
+          obterCorUrgencia={(urgenciaTexto?: string) => {
+            if (!urgenciaTexto) return "#64748B";
+            switch (urgenciaTexto.toLowerCase()) {
+              case "baixa": return "#2563EB";
+              case "média":
+              case "media": return "#D97706";
+              case "alta":
+              case "urgente": return "#E11D48";
+              default: return "#64748B";
+            }
+          }}
+          formatarData={formatarData}
+          formatarHorasMinutos={formatarHorasMinutos}
+          calcularDiferencaHoras={calcularDiferencaHoras}
+        />
       </Box>
     </Box>
   );
